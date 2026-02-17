@@ -46,15 +46,8 @@ actor TranslationService {
             let availability = LanguageAvailability()
             let status = await availability.status(from: sourceLanguage, to: targetLanguage)
             switch status {
-            case .installed:
+            case .installed, .supported:
                 break
-            case .supported:
-                throw TranslationServiceError.languageModelsMissing(
-                    source: localizedLanguageName(for: sourceLanguage),
-                    target: localizedLanguageName(for: targetLanguage),
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage
-                )
             case .unsupported:
                 throw TranslationServiceError.unsupportedLanguagePair(
                     source: localizedLanguageName(for: sourceLanguage),
@@ -64,18 +57,27 @@ actor TranslationService {
                 break
             }
 
-            let session = TranslationSession(
-                installedSource: sourceLanguage,
-                target: targetLanguage
-            )
-
             do {
-                try await session.prepareTranslation()
-                let response = try await session.translate(trimmed)
-                return response.targetText
+                return try await translateUsingSession(
+                    text: trimmed,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
             } catch let translationError as TranslationError {
                 switch translationError {
                 case .notInstalled:
+                    let refreshedStatus = await availability.status(from: sourceLanguage, to: targetLanguage)
+                    switch refreshedStatus {
+                    case .installed:
+                        return try await translateUsingSession(
+                            text: trimmed,
+                            sourceLanguage: sourceLanguage,
+                            targetLanguage: targetLanguage
+                        )
+                    default:
+                        break
+                    }
+
                     throw TranslationServiceError.languageModelsMissing(
                         source: localizedLanguageName(for: sourceLanguage),
                         target: localizedLanguageName(for: targetLanguage),
@@ -89,6 +91,21 @@ actor TranslationService {
         } else {
             throw TranslationServiceError.unsupportedSystem
         }
+    }
+
+    @available(macOS 26.0, *)
+    private func translateUsingSession(
+        text: String,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language
+    ) async throws -> String {
+        let session = TranslationSession(
+            installedSource: sourceLanguage,
+            target: targetLanguage
+        )
+        try await session.prepareTranslation()
+        let response = try await session.translate(text)
+        return response.targetText
     }
 
     private func detectSourceLanguage(in text: String) throws -> Locale.Language {
