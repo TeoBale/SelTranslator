@@ -24,13 +24,13 @@ Native macOS menu-bar application that translates currently selected text from a
 Single command:
 
 ```bash
-brew install --cask https://raw.githubusercontent.com/teobale/sel-translator/main/Casks/sel-translator.rb
+brew tap teobale/seltranslator https://github.com/TeoBale/SelTranslator && brew install --cask teobale/seltranslator/sel-translator
 ```
 
 After future releases:
 
 ```bash
-brew upgrade --cask sel-translator
+brew upgrade --cask teobale/seltranslator/sel-translator
 ```
 
 ## Run from source

@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <version> <artifact-url>"
-  echo "Example: $0 0.1.0 https://github.com/<org>/<repo>/releases/download/v0.1.0/SelTranslator-macos.zip"
+  echo "Example: $0 0.1.0 https://github.com/TeoBale/SelTranslator/releases/download/v0.1.0/SelTranslator-macos.zip"
   exit 1
 fi
 
@@ -23,7 +23,7 @@ cask "sel-translator" do
   url "$URL"
   name "SelTranslator"
   desc "Global selected-text translator for macOS"
-  homepage "https://github.com/teobale/sel-translator"
+  homepage "https://github.com/TeoBale/SelTranslator"
 
   app "SelTranslator.app"
 end
