@@ -63,12 +63,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        let target = languageStore.selectedLanguage.localeLanguage
         do {
             let selection = try accessibilityService.captureSelection()
             Diagnostics.info(
                 "Selection captured. editable=\(selection.isEditable) chars=\(selection.selectedText.count)"
             )
-            let target = languageStore.selectedLanguage.localeLanguage
             let translated = try await translationService.translate(
                 selection.selectedText,
                 targetLanguage: target
@@ -88,22 +88,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 overlayController.show("Translation done, but clipboard write failed.", kind: .error)
             }
-        } catch {
-            Diagnostics.error("Translation failed: \(Diagnostics.describe(error))")
-            if case let .languageModelsMissing(source, target, sourceLanguage, targetLanguage) = error as? TranslationServiceError {
-                openModelOnboarding(
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage,
-                    sourceDisplayName: source,
-                    targetDisplayName: target
-                )
-                overlayController.show(
-                    "Models are required for \(source) -> \(target).",
-                    kind: .error
-                )
-            } else {
-                overlayController.show(error.localizedDescription, kind: .error)
+        } catch let selectionError as SelectionServiceError {
+            Diagnostics.info(
+                "AX selection capture failed (\(selectionError.localizedDescription)); trying clipboard fallback."
+            )
+
+            do {
+                if try await translateFromClipboardFallback(targetLanguage: target) {
+                    return
+                }
+            } catch {
+                Diagnostics.error("Clipboard fallback failed: \(Diagnostics.describe(error))")
+                handleTranslationError(error)
+                return
             }
+
+            handleTranslationError(selectionError)
+        } catch {
+            handleTranslationError(error)
+        }
+    }
+
+    private func translateFromClipboardFallback(targetLanguage: Locale.Language) async throws -> Bool {
+        guard let copiedText = await clipboardService.captureSelectedTextByCopyShortcut() else {
+            Diagnostics.info("Clipboard fallback could not capture text.")
+            return false
+        }
+        Diagnostics.info("Clipboard fallback captured chars=\(copiedText.count)")
+
+        let translated = try await translationService.translate(
+            copiedText,
+            targetLanguage: targetLanguage
+        )
+        Diagnostics.info("Clipboard fallback translation completed. translatedChars=\(translated.count)")
+
+        let copied = clipboardService.copy(text: translated)
+        Diagnostics.info("Clipboard fallback write result: \(copied)")
+        if copied {
+            overlayController.show("Translated and copied to clipboard.", kind: .success)
+        } else {
+            overlayController.show("Translation done, but clipboard write failed.", kind: .error)
+        }
+
+        return true
+    }
+
+    private func handleTranslationError(_ error: Error) {
+        Diagnostics.error("Translation failed: \(Diagnostics.describe(error))")
+        if case let .languageModelsMissing(source, target, sourceLanguage, targetLanguage) = error as? TranslationServiceError {
+            openModelOnboarding(
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                sourceDisplayName: source,
+                targetDisplayName: target
+            )
+            overlayController.show(
+                "Models are required for \(source) -> \(target).",
+                kind: .error
+            )
+        } else {
+            overlayController.show(error.localizedDescription, kind: .error)
         }
     }
 
