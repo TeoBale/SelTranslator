@@ -7,7 +7,12 @@ enum TranslationServiceError: LocalizedError {
     case unableToIdentifyLanguage
     case unsupportedSystem
     case unsupportedLanguagePair(source: String, target: String)
-    case languageModelsMissing(source: String, target: String)
+    case languageModelsMissing(
+        source: String,
+        target: String,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language
+    )
 
     var errorDescription: String? {
         switch self {
@@ -19,7 +24,7 @@ enum TranslationServiceError: LocalizedError {
             return "Translation requires a newer macOS version."
         case .unsupportedLanguagePair(let source, let target):
             return "Unsupported translation pair: \(source) -> \(target)."
-        case .languageModelsMissing(let source, let target):
+        case .languageModelsMissing(let source, let target, _, _):
             return "Missing Apple translation models for \(source) -> \(target). Install in System Settings > General > Language & Region > Translation Languages."
         }
     }
@@ -46,7 +51,9 @@ actor TranslationService {
             case .supported:
                 throw TranslationServiceError.languageModelsMissing(
                     source: localizedLanguageName(for: sourceLanguage),
-                    target: localizedLanguageName(for: targetLanguage)
+                    target: localizedLanguageName(for: targetLanguage),
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
                 )
             case .unsupported:
                 throw TranslationServiceError.unsupportedLanguagePair(
@@ -71,7 +78,9 @@ actor TranslationService {
                 case .notInstalled:
                     throw TranslationServiceError.languageModelsMissing(
                         source: localizedLanguageName(for: sourceLanguage),
-                        target: localizedLanguageName(for: targetLanguage)
+                        target: localizedLanguageName(for: targetLanguage),
+                        sourceLanguage: sourceLanguage,
+                        targetLanguage: targetLanguage
                     )
                 default:
                     throw translationError

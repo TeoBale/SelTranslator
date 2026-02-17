@@ -10,6 +10,8 @@ Native macOS menu-bar application that translates currently selected text from a
 - If the selection is not editable, translated text is copied to clipboard.
 - A lightweight overlay confirms success or error.
 - Target language is selectable from the menu-bar app menu.
+- A Settings window is available from the menu bar to configure target language and global hotkey.
+- If translation models are missing, onboarding UI opens and can request model downloads.
 
 ## Requirements
 

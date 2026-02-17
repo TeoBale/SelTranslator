@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let languageStore = TranslationLanguageStore()
+    private let hotKeyStore = HotKeyStore()
     private let accessibilityService = AccessibilitySelectionService()
     private let clipboardService = ClipboardService()
     private let overlayController = OverlayController()
@@ -10,10 +11,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusBarController: StatusBarController?
     private var hotKeyManager: GlobalHotKeyManager?
+    private var settingsWindowController: SettingsWindowController?
+    private var modelOnboardingWindowController: TranslationModelOnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBarController = StatusBarController(
             languageStore: languageStore,
+            currentHotKey: { [weak self] in
+                self?.hotKeyStore.hotKey ?? .default
+            },
+            onOpenSettings: { [weak self] in
+                self?.openSettings()
+            },
             onOpenTranslationSettings: { [weak self] in
                 self?.openTranslationSettings()
             },
@@ -33,15 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        do {
-            try hotKeyManager?.register()
-        } catch {
-            Diagnostics.error("Hotkey registration failed: \(Diagnostics.describe(error))")
-            overlayController.show(
-                "Unable to register hotkey.",
-                kind: .error
-            )
-        }
+        applyHotKey(hotKeyStore.hotKey)
 
         if !accessibilityService.hasPermission(prompt: false) {
             _ = accessibilityService.hasPermission(prompt: true)
@@ -89,8 +90,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } catch {
             Diagnostics.error("Translation failed: \(Diagnostics.describe(error))")
-            overlayController.show(error.localizedDescription, kind: .error)
+            if case let .languageModelsMissing(source, target, sourceLanguage, targetLanguage) = error as? TranslationServiceError {
+                openModelOnboarding(
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    sourceDisplayName: source,
+                    targetDisplayName: target
+                )
+                overlayController.show(
+                    "Models are required for \(source) -> \(target).",
+                    kind: .error
+                )
+            } else {
+                overlayController.show(error.localizedDescription, kind: .error)
+            }
         }
+    }
+
+    private func applyHotKey(_ hotKey: HotKeyConfiguration) {
+        do {
+            try hotKeyManager?.register(hotKey: hotKey)
+            statusBarController?.refresh()
+            Diagnostics.info("Hotkey registered: \(hotKey.displayString)")
+        } catch {
+            Diagnostics.error("Hotkey registration failed: \(Diagnostics.describe(error))")
+            overlayController.show(
+                "Unable to register hotkey: \(hotKey.displayString).",
+                kind: .error
+            )
+        }
+    }
+
+    private func openSettings() {
+        settingsWindowController = SettingsWindowController(
+            languageStore: languageStore,
+            hotKeyStore: hotKeyStore,
+            onHotKeyApplied: { [weak self] hotKey in
+                self?.applyHotKey(hotKey)
+            },
+            onSettingsChanged: { [weak self] in
+                self?.statusBarController?.refresh()
+            }
+        )
+        settingsWindowController?.show()
+    }
+
+    private func openModelOnboarding(
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language,
+        sourceDisplayName: String,
+        targetDisplayName: String
+    ) {
+        modelOnboardingWindowController = TranslationModelOnboardingWindowController(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            sourceDisplayName: sourceDisplayName,
+            targetDisplayName: targetDisplayName,
+            onReady: { [weak self] in
+                self?.overlayController.show("Models ready. Retry translation.", kind: .success)
+            }
+        )
+        modelOnboardingWindowController?.show()
     }
 
     private func openTranslationSettings() {

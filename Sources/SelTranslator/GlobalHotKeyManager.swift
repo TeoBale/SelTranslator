@@ -31,7 +31,7 @@ final class GlobalHotKeyManager {
         unregister()
     }
 
-    func register() throws {
+    func register(hotKey: HotKeyConfiguration) throws {
         unregister()
 
         var eventType = EventTypeSpec(
@@ -52,11 +52,9 @@ final class GlobalHotKeyManager {
         }
 
         let identifier = EventHotKeyID(signature: Self.signature, id: Self.hotKeyID)
-        let modifiers = UInt32(controlKey | optionKey | cmdKey)
-
         let registrationStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_T),
-            modifiers,
+            hotKey.keyCode,
+            hotKey.modifiers,
             identifier,
             GetApplicationEventTarget(),
             0,

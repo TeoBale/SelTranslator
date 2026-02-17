@@ -3,6 +3,8 @@ import AppKit
 @MainActor
 final class StatusBarController: NSObject {
     private let languageStore: TranslationLanguageStore
+    private let currentHotKey: () -> HotKeyConfiguration
+    private let onOpenSettings: () -> Void
     private let onOpenTranslationSettings: () -> Void
     private let onOpenAccessibilitySettings: () -> Void
     private let onQuit: () -> Void
@@ -10,11 +12,15 @@ final class StatusBarController: NSObject {
 
     init(
         languageStore: TranslationLanguageStore,
+        currentHotKey: @escaping () -> HotKeyConfiguration,
+        onOpenSettings: @escaping () -> Void,
         onOpenTranslationSettings: @escaping () -> Void,
         onOpenAccessibilitySettings: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.languageStore = languageStore
+        self.currentHotKey = currentHotKey
+        self.onOpenSettings = onOpenSettings
         self.onOpenTranslationSettings = onOpenTranslationSettings
         self.onOpenAccessibilitySettings = onOpenAccessibilitySettings
         self.onQuit = onQuit
@@ -26,6 +32,10 @@ final class StatusBarController: NSObject {
         if let button = statusItem.button {
             button.title = "SelTr"
         }
+        rebuildMenu()
+    }
+
+    func refresh() {
         rebuildMenu()
     }
 
@@ -56,11 +66,19 @@ final class StatusBarController: NSObject {
         languagesItem.submenu = languageSubmenu
         menu.addItem(languagesItem)
 
-        let hotkeyItem = NSMenuItem(title: "Hotkey: Control+Option+Command+T", action: nil, keyEquivalent: "")
+        let hotkeyItem = NSMenuItem(title: "Hotkey: \(currentHotKey().displayString)", action: nil, keyEquivalent: "")
         hotkeyItem.isEnabled = false
         menu.addItem(hotkeyItem)
 
         menu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(
+            title: "Settings...",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         let openTranslationSettingsItem = NSMenuItem(
             title: "Open Translation Settings",
@@ -96,6 +114,12 @@ final class StatusBarController: NSObject {
             return
         }
         languageStore.selectedLanguage = language
+        rebuildMenu()
+    }
+
+    @objc
+    private func openSettings() {
+        onOpenSettings()
         rebuildMenu()
     }
 
