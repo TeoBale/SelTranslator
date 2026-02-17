@@ -1,6 +1,6 @@
 cask "sel-translator" do
-  version "0.1.2"
-  sha256 "3fa33eb145e5086b18d99f6edf67a1b6707004858701ed9910ab1aa9b79d7b76"
+  version "0.1.3"
+  sha256 "b82a0a3e6c5e727c9c03d29b20680799e28a1290d616cb765290ac3693e664a1"
 
   url "https://github.com/TeoBale/SelTranslator/releases/download/v#{version}/SelTranslator-macos.zip"
   name "SelTranslator"
