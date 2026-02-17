@@ -19,6 +19,20 @@ Native macOS menu-bar application that translates currently selected text from a
 - Accessibility permission enabled for the app.
 - Apple translation language models installed for source/target languages.
 
+## Install with Homebrew
+
+Single command:
+
+```bash
+brew install --cask https://raw.githubusercontent.com/teobale/sel-translator/main/Casks/sel-translator.rb
+```
+
+After future releases:
+
+```bash
+brew upgrade --cask sel-translator
+```
+
 ## Run from source
 
 ```bash
@@ -48,20 +62,24 @@ This generates:
 - `dist/SelTranslator.app`
 - `dist/SelTranslator-macos.zip`
 
-## Homebrew distribution design
+
+## Automated releases (GitHub Actions)
 
 This repository includes:
 
-- `packaging/homebrew/Casks/sel-translator.rb` (template cask)
-- `scripts/make-cask.sh` (helper that computes SHA256 from a release asset URL)
+- `.github/workflows/release.yml` (tag-based release pipeline)
+- `Casks/sel-translator.rb` (Homebrew cask used by brew install)
+- `scripts/update-cask.sh` (cask updater used by CI)
 
-Typical release flow:
+Release flow:
 
-1. Build zip artifact with `./scripts/build-app.sh`.
-2. Publish `dist/SelTranslator-macos.zip` to GitHub Releases.
-3. Generate cask content with:
+1. Create and push a version tag:
    ```bash
-   chmod +x scripts/make-cask.sh
-   ./scripts/make-cask.sh 0.1.0 https://github.com/<org>/<repo>/releases/download/v0.1.0/SelTranslator-macos.zip
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
-4. Commit the cask file in your Homebrew tap repository.
+2. GitHub Actions automatically:
+   - builds `SelTranslator.app`
+   - zips and uploads `SelTranslator-macos.zip` to GitHub Releases
+   - computes SHA256
+   - updates `Casks/sel-translator.rb` on the default branch with the new version and checksum

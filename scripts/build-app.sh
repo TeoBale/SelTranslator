@@ -6,6 +6,8 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/SelTranslator.app"
 ZIP_PATH="$DIST_DIR/SelTranslator-macos.zip"
 BIN_PATH="$ROOT_DIR/.build/release/SelTranslator"
+VERSION="${1:-0.1.0}"
+BUILD_NUMBER="${2:-1}"
 
 mkdir -p "$DIST_DIR"
 
@@ -17,7 +19,7 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_DIR/Contents/MacOS/SelTranslator"
 
-cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
+cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -35,9 +37,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${VERSION}</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>${BUILD_NUMBER}</string>
   <key>LSMinimumSystemVersion</key>
   <string>26.0</string>
   <key>LSUIElement</key>
