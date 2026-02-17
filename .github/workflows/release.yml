@@ -10,13 +10,33 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Select Latest Xcode
+        run: |
+          LATEST_XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)"
+          if [ -z "$LATEST_XCODE" ]; then
+            echo "No Xcode installation found on runner."
+            exit 1
+          fi
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify macOS SDK
+        run: |
+          SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "Detected macOS SDK: $SDK_VERSION"
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          if [ "$SDK_MAJOR" -lt 26 ]; then
+            echo "SelTranslator requires macOS SDK 26 or newer. Current runner SDK is $SDK_VERSION."
+            exit 1
+          fi
 
       - name: Resolve Version
         id: version
