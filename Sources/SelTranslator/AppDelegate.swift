@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import Translation
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -136,18 +137,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleTranslationError(_ error: Error) {
         Diagnostics.error("Translation failed: \(Diagnostics.describe(error))")
         if case let .languageModelsMissing(source, target, sourceLanguage, targetLanguage) = error as? TranslationServiceError {
-            openModelOnboarding(
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                sourceDisplayName: source,
-                targetDisplayName: target
-            )
-            overlayController.show(
-                "Models are required for \(source) -> \(target).",
-                kind: .error
-            )
+            Task { [weak self] in
+                guard let self else { return }
+                if await shouldOpenModelOnboarding(sourceLanguage: sourceLanguage, targetLanguage: targetLanguage) {
+                    openModelOnboarding(
+                        sourceLanguage: sourceLanguage,
+                        targetLanguage: targetLanguage,
+                        sourceDisplayName: source,
+                        targetDisplayName: target
+                    )
+                    overlayController.show(
+                        "Models are required for \(source) -> \(target).",
+                        kind: .error
+                    )
+                } else {
+                    overlayController.show(
+                        "Translation failed even though models appear installed. Retry.",
+                        kind: .error
+                    )
+                }
+            }
         } else {
             overlayController.show(error.localizedDescription, kind: .error)
+        }
+    }
+
+    private func shouldOpenModelOnboarding(
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language
+    ) async -> Bool {
+        if #available(macOS 26.0, *) {
+            let availability = LanguageAvailability()
+            let status = await availability.status(from: sourceLanguage, to: targetLanguage)
+            Diagnostics.info(
+                "Onboarding gate availability status from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier) status=\(describe(status))"
+            )
+            switch status {
+            case .supported:
+                return true
+            case .installed, .unsupported:
+                return false
+            @unknown default:
+                return false
+            }
+        }
+
+        return true
+    }
+
+    @available(macOS 26.0, *)
+    private func describe(_ status: LanguageAvailability.Status) -> String {
+        switch status {
+        case .installed:
+            return "installed"
+        case .supported:
+            return "supported"
+        case .unsupported:
+            return "unsupported"
+        @unknown default:
+            return "unknown"
         }
     }
 

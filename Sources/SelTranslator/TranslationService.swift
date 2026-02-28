@@ -1,6 +1,6 @@
 import Foundation
 import NaturalLanguage
-import Translation
+@preconcurrency import Translation
 
 enum TranslationServiceError: LocalizedError {
     case emptyInput
@@ -31,6 +31,19 @@ enum TranslationServiceError: LocalizedError {
 }
 
 actor TranslationService {
+    private enum Keys {
+        static let confirmedInstalledPairs = "confirmed_installed_pairs"
+    }
+
+    private let defaults: UserDefaults
+    private var confirmedInstalledPairs: Set<String>
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let storedPairs = defaults.array(forKey: Keys.confirmedInstalledPairs) as? [String] ?? []
+        self.confirmedInstalledPairs = Set(storedPairs)
+    }
+
     func translate(_ text: String, targetLanguage: Locale.Language) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -44,8 +57,12 @@ actor TranslationService {
 
         if #available(macOS 26.0, *) {
             let availability = LanguageAvailability()
-            let status = await availability.status(from: sourceLanguage, to: targetLanguage)
-            switch status {
+            let initialStatus = await availability.status(from: sourceLanguage, to: targetLanguage)
+            Diagnostics.info(
+                "Translation availability status=\(describe(initialStatus)) from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+            )
+
+            switch initialStatus {
             case .installed, .supported:
                 break
             case .unsupported:
@@ -58,29 +75,18 @@ actor TranslationService {
             }
 
             do {
-                return try await translateUsingSession(
+                let translated = try await translateUsingSessionWithRetry(
                     text: trimmed,
                     sourceLanguage: sourceLanguage,
                     targetLanguage: targetLanguage
                 )
+                rememberInstalledPair(sourceLanguage, targetLanguage)
+                return translated
             } catch let translationError as TranslationError {
                 switch translationError {
                 case .notInstalled:
-                    let refreshedStatus = await availability.status(from: sourceLanguage, to: targetLanguage)
-                    switch refreshedStatus {
-                    case .installed:
-                        return try await translateUsingSession(
-                            text: trimmed,
-                            sourceLanguage: sourceLanguage,
-                            targetLanguage: targetLanguage
-                        )
-                    default:
-                        break
-                    }
-
-                    throw TranslationServiceError.languageModelsMissing(
-                        source: localizedLanguageName(for: sourceLanguage),
-                        target: localizedLanguageName(for: targetLanguage),
+                    return try await recoverFromNotInstalled(
+                        text: trimmed,
                         sourceLanguage: sourceLanguage,
                         targetLanguage: targetLanguage
                     )
@@ -106,6 +112,284 @@ actor TranslationService {
         try await session.prepareTranslation()
         let response = try await session.translate(text)
         return response.targetText
+    }
+
+    @available(macOS 26.0, *)
+    private func translateUsingSessionWithRetry(
+        text: String,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language,
+        maxAttempts: Int = 3
+    ) async throws -> String {
+        var attempt = 1
+        while true {
+            do {
+                return try await translateUsingSession(
+                    text: text,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
+            } catch let translationError as TranslationError {
+                switch translationError {
+                case .notInstalled where attempt < maxAttempts:
+                    Diagnostics.info(
+                        "translateUsingSession returned notInstalled; retrying attempt \(attempt + 1)/\(maxAttempts) from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+                    )
+                    attempt += 1
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    continue
+                default:
+                    throw translationError
+                }
+            }
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private func recoverFromNotInstalled(
+        text: String,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language
+    ) async throws -> String {
+        let availability = LanguageAvailability()
+        let refreshedStatus = await availability.status(from: sourceLanguage, to: targetLanguage)
+        Diagnostics.info(
+            "Translation returned notInstalled; refreshed availability status=\(describe(refreshedStatus)) from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+        )
+
+        let normalizedSource = normalize(sourceLanguage)
+        let normalizedTarget = normalize(targetLanguage)
+        let hasNormalizedVariant =
+            normalizedSource.minimalIdentifier != sourceLanguage.minimalIdentifier ||
+            normalizedTarget.minimalIdentifier != targetLanguage.minimalIdentifier
+
+        if let installedVariantPair = await findInstalledVariantPair(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        ) {
+            let (variantSource, variantTarget) = installedVariantPair
+            Diagnostics.info(
+                "Found installed variant pair from=\(variantSource.minimalIdentifier) to=\(variantTarget.minimalIdentifier)"
+            )
+            do {
+                let translated = try await translateUsingSessionWithRetry(
+                    text: text,
+                    sourceLanguage: variantSource,
+                    targetLanguage: variantTarget
+                )
+                rememberInstalledPair(sourceLanguage, targetLanguage)
+                rememberInstalledPair(variantSource, variantTarget)
+                return translated
+            } catch {
+                Diagnostics.error(
+                    "Retry with installed variant pair failed: \(Diagnostics.describe(error))"
+                )
+            }
+        }
+
+        switch refreshedStatus {
+        case .unsupported:
+            throw TranslationServiceError.unsupportedLanguagePair(
+                source: localizedLanguageName(for: sourceLanguage),
+                target: localizedLanguageName(for: targetLanguage)
+            )
+        case .installed:
+            var installedRetryError: Error?
+            do {
+                let translated = try await translateUsingSessionWithRetry(
+                    text: text,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
+                rememberInstalledPair(sourceLanguage, targetLanguage)
+                return translated
+            } catch {
+                installedRetryError = error
+                Diagnostics.error(
+                    "Retry with installedSource failed after installed status: \(Diagnostics.describe(error))"
+                )
+            }
+
+            if hasNormalizedVariant {
+                do {
+                    Diagnostics.info(
+                        "Retrying translation with normalized identifiers from=\(normalizedSource.minimalIdentifier) to=\(normalizedTarget.minimalIdentifier)"
+                    )
+                    let translated = try await translateUsingSessionWithRetry(
+                        text: text,
+                        sourceLanguage: normalizedSource,
+                        targetLanguage: normalizedTarget
+                    )
+                    rememberInstalledPair(sourceLanguage, targetLanguage)
+                    rememberInstalledPair(normalizedSource, normalizedTarget)
+                    return translated
+                } catch {
+                    Diagnostics.error(
+                        "Retry with normalized identifiers failed after installed status: \(Diagnostics.describe(error))"
+                    )
+                }
+            }
+
+            if let installedRetryError {
+                throw installedRetryError
+            }
+            throw TranslationError.notInstalled
+        case .supported:
+            guard hasNormalizedVariant else {
+                if isKnownInstalledPair(sourceLanguage, targetLanguage) {
+                    Diagnostics.info(
+                        "Suppressing languageModelsMissing for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+                    )
+                    throw TranslationError.notInstalled
+                }
+                throw TranslationServiceError.languageModelsMissing(
+                    source: localizedLanguageName(for: sourceLanguage),
+                    target: localizedLanguageName(for: targetLanguage),
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage
+                )
+            }
+
+            do {
+                Diagnostics.info(
+                    "Retrying translation with normalized identifiers from=\(normalizedSource.minimalIdentifier) to=\(normalizedTarget.minimalIdentifier)"
+                )
+                let translated = try await translateUsingSessionWithRetry(
+                    text: text,
+                    sourceLanguage: normalizedSource,
+                    targetLanguage: normalizedTarget
+                )
+                rememberInstalledPair(sourceLanguage, targetLanguage)
+                rememberInstalledPair(normalizedSource, normalizedTarget)
+                return translated
+            } catch let translationError as TranslationError {
+                switch translationError {
+                case .notInstalled:
+                    if isKnownInstalledPair(sourceLanguage, targetLanguage) {
+                        Diagnostics.info(
+                            "Suppressing languageModelsMissing after retry for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+                        )
+                        throw translationError
+                    }
+                    throw TranslationServiceError.languageModelsMissing(
+                        source: localizedLanguageName(for: sourceLanguage),
+                        target: localizedLanguageName(for: targetLanguage),
+                        sourceLanguage: sourceLanguage,
+                        targetLanguage: targetLanguage
+                    )
+                default:
+                    throw translationError
+                }
+            } catch {
+                throw error
+            }
+        @unknown default:
+            break
+        }
+
+        if isKnownInstalledPair(sourceLanguage, targetLanguage) {
+            Diagnostics.info(
+                "Suppressing fallback languageModelsMissing for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
+            )
+            throw TranslationError.notInstalled
+        }
+        throw TranslationServiceError.languageModelsMissing(
+            source: localizedLanguageName(for: sourceLanguage),
+            target: localizedLanguageName(for: targetLanguage),
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
+    }
+
+    @available(macOS 26.0, *)
+    private func describe(_ status: LanguageAvailability.Status) -> String {
+        switch status {
+        case .installed:
+            return "installed"
+        case .supported:
+            return "supported"
+        case .unsupported:
+            return "unsupported"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func normalize(_ language: Locale.Language) -> Locale.Language {
+        Locale.Language(identifier: language.minimalIdentifier)
+    }
+
+    @available(macOS 26.0, *)
+    private func findInstalledVariantPair(
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language
+    ) async -> (Locale.Language, Locale.Language)? {
+        let availability = LanguageAvailability()
+        let supportedLanguages = await availability.supportedLanguages
+        let sourceCandidates = candidateLanguages(for: sourceLanguage, supportedLanguages: supportedLanguages)
+        let targetCandidates = candidateLanguages(for: targetLanguage, supportedLanguages: supportedLanguages)
+
+        for sourceCandidate in sourceCandidates {
+            for targetCandidate in targetCandidates {
+                let status = await availability.status(from: sourceCandidate, to: targetCandidate)
+                if status == .installed {
+                    return (sourceCandidate, targetCandidate)
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func candidateLanguages(
+        for language: Locale.Language,
+        supportedLanguages: [Locale.Language]
+    ) -> [Locale.Language] {
+        let normalized = normalize(language)
+        let base = baseIdentifier(for: normalized)
+        var seen = Set<String>()
+        var candidates: [Locale.Language] = []
+
+        func appendIfNeeded(_ candidate: Locale.Language) {
+            let key = candidate.minimalIdentifier
+            if seen.insert(key).inserted {
+                candidates.append(candidate)
+            }
+        }
+
+        appendIfNeeded(normalized)
+        appendIfNeeded(language)
+
+        for supported in supportedLanguages where baseIdentifier(for: supported) == base {
+            appendIfNeeded(supported)
+        }
+
+        return candidates
+    }
+
+    private func baseIdentifier(for language: Locale.Language) -> String {
+        language.minimalIdentifier.split(separator: "-").first.map(String.init) ?? language.minimalIdentifier
+    }
+
+    private func rememberInstalledPair(_ sourceLanguage: Locale.Language, _ targetLanguage: Locale.Language) {
+        let directKey = pairKey(sourceLanguage, targetLanguage)
+        let normalizedKey = pairKey(normalize(sourceLanguage), normalize(targetLanguage))
+        let insertedDirect = confirmedInstalledPairs.insert(directKey).inserted
+        let insertedNormalized = confirmedInstalledPairs.insert(normalizedKey).inserted
+        if insertedDirect || insertedNormalized {
+            defaults.set(Array(confirmedInstalledPairs).sorted(), forKey: Keys.confirmedInstalledPairs)
+            Diagnostics.info("Remembered successful installed pair(s): \(directKey), \(normalizedKey)")
+        }
+    }
+
+    private func isKnownInstalledPair(_ sourceLanguage: Locale.Language, _ targetLanguage: Locale.Language) -> Bool {
+        let directKey = pairKey(sourceLanguage, targetLanguage)
+        let normalizedKey = pairKey(normalize(sourceLanguage), normalize(targetLanguage))
+        return confirmedInstalledPairs.contains(directKey) || confirmedInstalledPairs.contains(normalizedKey)
+    }
+
+    private func pairKey(_ sourceLanguage: Locale.Language, _ targetLanguage: Locale.Language) -> String {
+        "\(sourceLanguage.minimalIdentifier)->\(targetLanguage.minimalIdentifier)"
     }
 
     private func detectSourceLanguage(in text: String) throws -> Locale.Language {
