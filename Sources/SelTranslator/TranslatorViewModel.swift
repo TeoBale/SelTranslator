@@ -213,7 +213,7 @@ final class TranslatorViewModel {
         )
     }
 
-    private func draftToRestore(for incomingPrefill: String?) -> DraftSnapshot? {
+    private func draftToRestore(for _: String?) -> DraftSnapshot? {
         guard let draft = restorableDraft else {
             return nil
         }
@@ -222,12 +222,6 @@ final class TranslatorViewModel {
         guard age <= Double(languageStore.draftRestoreTimeout.rawValue) else {
             restorableDraft = nil
             return nil
-        }
-
-        if let incomingPrefill {
-            guard draft.selectionSeed == incomingPrefill else {
-                return nil
-            }
         }
 
         return draft
