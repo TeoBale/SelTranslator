@@ -1,0 +1,8 @@
+tasks:
+  - title: Completely redo the UI to be more ergonomic
+    parallel_group: 1
+    completed: false
+  - title: Stabilize the translation panel so empty, loading, error, and translated states keep the same skeleton/footprint.
+    completed: false
+  - title: Improve source editor ergonomics.
+    completed: false
