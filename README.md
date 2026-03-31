@@ -19,7 +19,7 @@ Native macOS menu-bar application that translates currently selected text from a
 - Accessibility permission enabled for the app.
 - Apple translation language models installed for source/target languages.
 
-## Install with Homebrew
+## Install with Homebrew (Original version)
 
 Single command:
 

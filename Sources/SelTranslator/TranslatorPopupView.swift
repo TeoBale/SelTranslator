@@ -10,6 +10,7 @@ struct TranslatorPopupView: View {
     private let columnSpacing: CGFloat = 12
     private let swapColumnWidth: CGFloat = 40
     private let sourceInset = EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
+    private let pickerStatusHeight: CGFloat = 14
 
     init(viewModel: TranslatorViewModel, onCopyAndClose: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -64,10 +65,59 @@ struct TranslatorPopupView: View {
         .disabled(viewModel.translatedText.isEmpty)
         .hidden()
 
-        Button("Select All") {
-            NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        responderShortcut(
+            title: "Cut",
+            key: "x",
+            modifiers: .command,
+            action: #selector(NSText.cut(_:))
+        )
+
+        responderShortcut(
+            title: "Copy",
+            key: "c",
+            modifiers: .command,
+            action: #selector(NSText.copy(_:))
+        )
+
+        responderShortcut(
+            title: "Paste",
+            key: "v",
+            modifiers: .command,
+            action: #selector(NSText.paste(_:))
+        )
+
+        responderShortcut(
+            title: "Select All",
+            key: "a",
+            modifiers: .command,
+            action: #selector(NSText.selectAll(_:))
+        )
+
+        responderShortcut(
+            title: "Undo",
+            key: "z",
+            modifiers: .command,
+            action: Selector(("undo:"))
+        )
+
+        responderShortcut(
+            title: "Redo",
+            key: "z",
+            modifiers: [.command, .shift],
+            action: Selector(("redo:"))
+        )
+    }
+
+    private func responderShortcut(
+        title: String,
+        key: KeyEquivalent,
+        modifiers: EventModifiers,
+        action: Selector
+    ) -> some View {
+        Button(title) {
+            NSApp.sendAction(action, to: nil, from: nil)
         }
-        .keyboardShortcut("a", modifiers: .command)
+        .keyboardShortcut(key, modifiers: modifiers)
         .hidden()
     }
 
@@ -100,7 +150,7 @@ struct TranslatorPopupView: View {
     }
 
     private var pickerRow: some View {
-        HStack(alignment: .center, spacing: columnSpacing) {
+        HStack(alignment: .top, spacing: columnSpacing) {
             languagePickerCard(title: "From") {
                 VStack(alignment: .leading, spacing: 4) {
                     Picker("From", selection: $viewModel.selectedSourceLanguageID) {
@@ -118,6 +168,9 @@ struct TranslatorPopupView: View {
                             .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                             .transition(.opacity)
+                    } else {
+                        Color.clear
+                            .frame(height: pickerStatusHeight)
                     }
                 }
             }
@@ -138,13 +191,18 @@ struct TranslatorPopupView: View {
             .help("Swap source and target languages")
 
             languagePickerCard(title: "To") {
-                Picker("To", selection: $viewModel.selectedTargetLanguageID) {
-                    ForEach(viewModel.availableLanguages) { language in
-                        Text(language.displayName).tag(language.id)
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker("To", selection: $viewModel.selectedTargetLanguageID) {
+                        ForEach(viewModel.availableLanguages) { language in
+                            Text(language.displayName).tag(language.id)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    Color.clear
+                        .frame(height: pickerStatusHeight)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
             }
             .frame(maxWidth: .infinity)
         }
