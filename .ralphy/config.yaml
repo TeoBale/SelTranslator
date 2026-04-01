@@ -1,0 +1,3 @@
+rules:
+  - "install any packages/libraries/cli tools you need"
+  - "make detailed and well named commits as you go"
