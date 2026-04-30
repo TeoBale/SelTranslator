@@ -1,3 +1,4 @@
+#if canImport(XCTest)
 import XCTest
 @testable import SelTranslatorCore
 
@@ -37,13 +38,24 @@ final class TranslationLanguageStoreTests: XCTestCase {
         // Stored id isn't in available languages; should fallback.
         XCTAssertEqual(store.selectedLanguage, TranslationLanguage.fallback)
     }
-}
 
-// Linux test discovery compatibility. Not strictly necessary in macOS but harmless.
+    func testSelectedLanguageFallsBackWhenNoAvailableLanguages() {
+        // When there are no available languages, ensure we still fall back to default
+        let defaults = UserDefaults(suiteName: "SelTranslatorCoreTests-Defaults-NoAvailable")!
+        defaults.removePersistentDomain(forName: "SelTranslatorCoreTests-Defaults-NoAvailable")
+        let store = TranslationLanguageStore(availableLanguages: [], defaults: defaults)
+
+        XCTAssertEqual(store.selectedLanguage, TranslationLanguage.fallback)
+    }
+}
 extension TranslationLanguageStoreTests {
     static var allTests = [
         ("testSelectedLanguageFallsBackWhenNotStored", testSelectedLanguageFallsBackWhenNotStored),
         ("testSelectedLanguageReadsExistingMatch", testSelectedLanguageReadsExistingMatch),
         ("testSelectedLanguageFallsBackWhenStoredNotInAvailable", testSelectedLanguageFallsBackWhenStoredNotInAvailable),
+        ("testSelectedLanguageFallsBackWhenNoAvailableLanguages", testSelectedLanguageFallsBackWhenNoAvailableLanguages),
     ]
 }
+#else
+// XCTest not available in this environment; tests are skipped.
+#endif
