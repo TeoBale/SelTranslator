@@ -1,14 +1,14 @@
 import Foundation
 
-final class TranslationLanguageStore {
+public final class TranslationLanguageStore {
     private enum Keys {
         static let targetLanguageID = "target_language_id"
     }
 
-    let availableLanguages: [TranslationLanguage]
+    public let availableLanguages: [TranslationLanguage]
     private let defaults: UserDefaults
 
-    init(
+    public init(
         availableLanguages: [TranslationLanguage] = TranslationLanguage.all,
         defaults: UserDefaults = .standard
     ) {
@@ -16,7 +16,7 @@ final class TranslationLanguageStore {
         self.defaults = defaults
     }
 
-    var selectedLanguage: TranslationLanguage {
+    public var selectedLanguage: TranslationLanguage {
         get {
             guard
                 let storedID = defaults.string(forKey: Keys.targetLanguageID),

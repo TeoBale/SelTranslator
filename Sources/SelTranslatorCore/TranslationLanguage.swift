@@ -1,16 +1,17 @@
 import Foundation
 
-struct TranslationLanguage: Equatable, Hashable {
-    let id: String
-    let displayName: String
+// Expose as public for cross-module usage
+public struct TranslationLanguage: Sendable, Equatable, Hashable {
+    public let id: String
+    public let displayName: String
 
-    var localeLanguage: Locale.Language {
+    public var localeLanguage: Locale.Language {
         Locale.Language(identifier: id)
     }
 }
 
 extension TranslationLanguage {
-    static let all: [TranslationLanguage] = [
+    public static let all: [TranslationLanguage] = [
         .init(id: "ar", displayName: "Arabic"),
         .init(id: "zh-Hans", displayName: "Chinese (Simplified)"),
         .init(id: "zh-Hant", displayName: "Chinese (Traditional)"),
@@ -33,5 +34,5 @@ extension TranslationLanguage {
         .init(id: "vi", displayName: "Vietnamese")
     ]
 
-    static let fallback = TranslationLanguage(id: "en", displayName: "English")
+    public static let fallback = TranslationLanguage(id: "en", displayName: "English")
 }
