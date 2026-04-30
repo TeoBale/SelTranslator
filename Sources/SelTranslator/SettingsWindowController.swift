@@ -23,7 +23,7 @@ final class SettingsWindowController: NSWindowController {
             languages: languageStore.availableLanguages,
             selectedLanguageID: languageStore.selectedLanguage.id,
             hotKey: hotKeyStore.hotKey,
-            onLanguageChanged: { [weak languageStore] languageID in
+            onLanguageChanged: { [weak languageStore] (languageID: String) in
                 guard
                     let languageStore,
                     let language = languageStore.availableLanguages.first(where: { $0.id == languageID })
@@ -31,7 +31,7 @@ final class SettingsWindowController: NSWindowController {
                 languageStore.selectedLanguage = language
                 onSettingsChanged()
             },
-            onHotKeyChanged: { [weak hotKeyStore] hotKey in
+            onHotKeyChanged: { [weak hotKeyStore] (hotKey: HotKeyConfiguration) in
                 hotKeyStore?.hotKey = hotKey
                 onHotKeyApplied(hotKey)
                 onSettingsChanged()

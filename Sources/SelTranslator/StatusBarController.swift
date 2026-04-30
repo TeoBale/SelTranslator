@@ -60,7 +60,7 @@ final class StatusBarController: NSObject {
             )
             item.target = self
             item.representedObject = language.id
-            item.state = language.id == languageStore.selectedLanguage.id ? .on : .off
+            item.state = language.id == languageStore.selectedLanguage.id ? NSControl.StateValue.on : NSControl.StateValue.off
             languageSubmenu.addItem(item)
         }
         languagesItem.submenu = languageSubmenu
