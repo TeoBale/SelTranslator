@@ -1,4 +1,3 @@
-#if canImport(XCTest)
 import XCTest
 @testable import SelTranslatorCore
 
@@ -48,14 +47,3 @@ final class TranslationLanguageStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedLanguage, TranslationLanguage.fallback)
     }
 }
-extension TranslationLanguageStoreTests {
-    static var allTests = [
-        ("testSelectedLanguageFallsBackWhenNotStored", testSelectedLanguageFallsBackWhenNotStored),
-        ("testSelectedLanguageReadsExistingMatch", testSelectedLanguageReadsExistingMatch),
-        ("testSelectedLanguageFallsBackWhenStoredNotInAvailable", testSelectedLanguageFallsBackWhenStoredNotInAvailable),
-        ("testSelectedLanguageFallsBackWhenNoAvailableLanguages", testSelectedLanguageFallsBackWhenNoAvailableLanguages),
-    ]
-}
-#else
-// XCTest not available in this environment; tests are skipped.
-#endif
