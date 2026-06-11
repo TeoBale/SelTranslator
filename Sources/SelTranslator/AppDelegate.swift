@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyManager: GlobalHotKeyManager?
     private var settingsWindowController: SettingsWindowController?
     private var modelOnboardingWindowController: TranslationModelOnboardingWindowController?
+    private var isHandlingTranslation = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBarController = StatusBarController(
@@ -56,6 +57,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleTranslationTrigger() async {
         Diagnostics.info("Hotkey pressed; starting translation.")
+        guard !isHandlingTranslation else {
+            Diagnostics.info("Ignoring hotkey press because translation is already in progress.")
+            overlayController.show("Translation already in progress.", kind: .error)
+            return
+        }
+        isHandlingTranslation = true
+        defer {
+            isHandlingTranslation = false
+        }
+
         guard accessibilityService.hasPermission(prompt: true) else {
             overlayController.show(
                 "Accessibility permission is required.",

@@ -84,9 +84,15 @@ struct SettingsView: View {
                     .onChange(of: useShift) { _, _ in applyHotKey() }
                     .onChange(of: useCommand) { _, _ in applyHotKey() }
 
-                    Text("Current shortcut: \(currentHotKey.displayString)")
+                    Text("Shortcut preview: \(currentHotKey.displayString)")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+
+                    if !currentHotKey.isValidGlobalShortcut {
+                        Text("Choose at least one modifier.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                    }
                 }
             }
 
@@ -109,6 +115,9 @@ struct SettingsView: View {
 
     private func applyHotKey() {
         let hotKey = currentHotKey
+        guard hotKey.isValidGlobalShortcut else {
+            return
+        }
         onHotKeyChanged(hotKey)
     }
 }

@@ -22,9 +22,16 @@ final class HotKeyStore {
             }
             let keyCode = UInt32(defaults.integer(forKey: Keys.keyCode))
             let modifiers = UInt32(defaults.integer(forKey: Keys.modifiers))
-            return HotKeyConfiguration(keyCode: keyCode, modifiers: modifiers)
+            let storedHotKey = HotKeyConfiguration(keyCode: keyCode, modifiers: modifiers)
+            guard storedHotKey.isValidGlobalShortcut else {
+                return .default
+            }
+            return storedHotKey
         }
         set {
+            guard newValue.isValidGlobalShortcut else {
+                return
+            }
             defaults.set(Int(newValue.keyCode), forKey: Keys.keyCode)
             defaults.set(Int(newValue.modifiers), forKey: Keys.modifiers)
         }

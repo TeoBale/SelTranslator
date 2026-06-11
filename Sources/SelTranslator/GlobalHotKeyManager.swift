@@ -33,6 +33,12 @@ final class GlobalHotKeyManager {
 
     func register(hotKey: HotKeyConfiguration) throws {
         unregister()
+        var didRegisterHotKey = false
+        defer {
+            if !didRegisterHotKey {
+                unregister()
+            }
+        }
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -63,6 +69,7 @@ final class GlobalHotKeyManager {
         guard registrationStatus == noErr else {
             throw HotKeyError.registrationFailed(registrationStatus)
         }
+        didRegisterHotKey = true
     }
 
     func unregister() {

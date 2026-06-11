@@ -12,6 +12,8 @@ struct HotKeyConfiguration: Equatable {
     var keyCode: UInt32
     var modifiers: UInt32
 
+    private static let supportedModifierMask = UInt32(controlKey | optionKey | shiftKey | cmdKey)
+
     static let `default` = HotKeyConfiguration(
         keyCode: UInt32(kVK_ANSI_T),
         modifiers: UInt32(controlKey | optionKey | cmdKey)
@@ -70,6 +72,12 @@ struct HotKeyConfiguration: Equatable {
 
     var isShiftEnabled: Bool {
         modifiers & UInt32(shiftKey) != 0
+    }
+
+    var isValidGlobalShortcut: Bool {
+        let hasSupportedModifier = modifiers & Self.supportedModifierMask != 0
+        let hasSupportedKey = Self.keyOptions.contains { $0.keyCode == keyCode }
+        return hasSupportedModifier && hasSupportedKey
     }
 
     func with(command: Bool, option: Bool, control: Bool, shift: Bool) -> HotKeyConfiguration {
