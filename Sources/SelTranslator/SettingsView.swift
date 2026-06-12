@@ -1,3 +1,5 @@
+import AppKit
+import Carbon
 import SwiftUI
 
 struct SettingsView: View {
@@ -9,11 +11,10 @@ struct SettingsView: View {
     let onResetDefaults: () -> Void
 
     @State private var localLanguageID: String
-    @State private var localKeyCode: UInt32
-    @State private var useCommand: Bool
-    @State private var useOption: Bool
-    @State private var useControl: Bool
-    @State private var useShift: Bool
+    @State private var localHotKey: HotKeyConfiguration
+    @State private var isRecordingHotKey = false
+    @State private var recorderMessage: String?
+    @State private var keyEventMonitor: Any?
 
     init(
         languages: [TranslationLanguage],
@@ -31,93 +32,137 @@ struct SettingsView: View {
         self.onResetDefaults = onResetDefaults
 
         _localLanguageID = State(initialValue: selectedLanguageID)
-        _localKeyCode = State(initialValue: hotKey.keyCode)
-        _useCommand = State(initialValue: hotKey.isCommandEnabled)
-        _useOption = State(initialValue: hotKey.isOptionEnabled)
-        _useControl = State(initialValue: hotKey.isControlEnabled)
-        _useShift = State(initialValue: hotKey.isShiftEnabled)
+        _localHotKey = State(initialValue: hotKey)
     }
 
-    private var currentHotKey: HotKeyConfiguration {
-        HotKeyConfiguration(keyCode: localKeyCode, modifiers: 0)
-            .with(command: useCommand, option: useOption, control: useControl, shift: useShift)
+    private var shortcutSummary: String {
+        isRecordingHotKey ? "Press shortcut" : hotKeyDisplayString
+    }
+
+    private var hotKeyDisplayString: String {
+        var tokens: [String] = []
+        if localHotKey.isControlEnabled { tokens.append("⌃") }
+        if localHotKey.isOptionEnabled { tokens.append("⌥") }
+        if localHotKey.isShiftEnabled { tokens.append("⇧") }
+        if localHotKey.isCommandEnabled { tokens.append("⌘") }
+        tokens.append(HotKeyConfiguration.keyOptions.first { $0.keyCode == localHotKey.keyCode }?.label ?? "Key")
+        return tokens.joined()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("SelTranslator Settings")
-                .font(.system(size: 18, weight: .semibold))
-
-            GroupBox("Translation") {
-                Picker("Target Language", selection: $localLanguageID) {
-                    ForEach(languages, id: \.id) { language in
-                        Text(language.displayName).tag(language.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .onChange(of: localLanguageID) { _, newValue in
-                    onLanguageChanged(newValue)
-                }
-            }
-
-            GroupBox("Global Hotkey") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("Key", selection: $localKeyCode) {
-                        ForEach(HotKeyConfiguration.keyOptions) { option in
-                            Text(option.label).tag(option.keyCode)
+        VStack(spacing: 12) {
+            Form {
+                Section("Translation") {
+                    LabeledContent("Target Language") {
+                        Picker("Target Language", selection: $localLanguageID) {
+                            ForEach(languages, id: \.id) { language in
+                                Text(language.displayName).tag(language.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 240, alignment: .trailing)
+                        .onChange(of: localLanguageID) { _, newValue in
+                            onLanguageChanged(newValue)
                         }
                     }
-                    .pickerStyle(.menu)
-                    .onChange(of: localKeyCode) { _, _ in
-                        applyHotKey()
+                }
+
+                Section("Keyboard") {
+                    LabeledContent("Global Shortcut") {
+                        Button {
+                            recorderMessage = nil
+                            isRecordingHotKey = true
+                        } label: {
+                            Text(shortcutSummary)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(minWidth: 118)
+                        }
+                        .controlSize(.regular)
+                        .help("Click, then press a shortcut such as ⌃⌥⌘T.")
                     }
 
-                    HStack(spacing: 12) {
-                        Toggle("Control", isOn: $useControl)
-                        Toggle("Option", isOn: $useOption)
-                        Toggle("Shift", isOn: $useShift)
-                        Toggle("Command", isOn: $useCommand)
-                    }
-                    .toggleStyle(.checkbox)
-                    .onChange(of: useControl) { _, _ in applyHotKey() }
-                    .onChange(of: useOption) { _, _ in applyHotKey() }
-                    .onChange(of: useShift) { _, _ in applyHotKey() }
-                    .onChange(of: useCommand) { _, _ in applyHotKey() }
-
-                    Text("Shortcut preview: \(currentHotKey.displayString)")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-
-                    if !currentHotKey.isValidGlobalShortcut {
-                        Text("Choose at least one modifier.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red)
+                    if let recorderMessage {
+                        Text(recorderMessage)
+                            .font(.footnote)
+                            .foregroundStyle(recorderMessage.hasPrefix("Use") ? .red : .secondary)
                     }
                 }
             }
+            .formStyle(.grouped)
 
             HStack {
                 Spacer()
-                Button("Reset Defaults") {
-                    localLanguageID = TranslationLanguage.fallback.id
-                    localKeyCode = HotKeyConfiguration.default.keyCode
-                    useControl = HotKeyConfiguration.default.isControlEnabled
-                    useOption = HotKeyConfiguration.default.isOptionEnabled
-                    useShift = HotKeyConfiguration.default.isShiftEnabled
-                    useCommand = HotKeyConfiguration.default.isCommandEnabled
-                    onResetDefaults()
+                Button("Restore Defaults") {
+                    resetDefaults()
                 }
             }
+            .padding(.horizontal, 20)
         }
-        .padding(18)
-        .frame(width: 460, height: 280)
+        .padding(20)
+        .frame(width: 560, height: 300)
+        .onChange(of: isRecordingHotKey) { _, isRecording in
+            updateKeyEventMonitor(isRecording: isRecording)
+        }
+        .onDisappear {
+            updateKeyEventMonitor(isRecording: false)
+        }
     }
 
-    private func applyHotKey() {
-        let hotKey = currentHotKey
-        guard hotKey.isValidGlobalShortcut else {
+    private func resetDefaults() {
+        localLanguageID = TranslationLanguage.fallback.id
+        localHotKey = .default
+        recorderMessage = nil
+        isRecordingHotKey = false
+        onResetDefaults()
+    }
+
+    private func updateKeyEventMonitor(isRecording: Bool) {
+        if let keyEventMonitor {
+            NSEvent.removeMonitor(keyEventMonitor)
+            self.keyEventMonitor = nil
+        }
+
+        guard isRecording else {
             return
         }
-        onHotKeyChanged(hotKey)
+
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            recordHotKey(from: event)
+            return nil
+        }
+    }
+
+    private func recordHotKey(from event: NSEvent) {
+        if Int(event.keyCode) == kVK_Escape {
+            recorderMessage = nil
+            isRecordingHotKey = false
+            return
+        }
+
+        let recordedHotKey = HotKeyConfiguration(
+            keyCode: UInt32(event.keyCode),
+            modifiers: carbonModifiers(from: event.modifierFlags)
+        )
+
+        guard recordedHotKey.isValidGlobalShortcut else {
+            recorderMessage = "Use A-Z or 0-9 with at least one modifier."
+            NSSound.beep()
+            return
+        }
+
+        localHotKey = recordedHotKey
+        recorderMessage = nil
+        isRecordingHotKey = false
+        onHotKeyChanged(recordedHotKey)
+    }
+
+    private func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var modifiers: UInt32 = 0
+        if flags.contains(.control) { modifiers |= UInt32(controlKey) }
+        if flags.contains(.option) { modifiers |= UInt32(optionKey) }
+        if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+        if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
+        return modifiers
     }
 }

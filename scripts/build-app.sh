@@ -12,12 +12,14 @@ BUILD_NUMBER="${2:-1}"
 mkdir -p "$DIST_DIR"
 
 swift build -c release --product SelTranslator
+swift "$ROOT_DIR/scripts/generate-app-icon.swift" "$DIST_DIR"
 
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_DIR/Contents/MacOS/SelTranslator"
+cp "$DIST_DIR/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -28,6 +30,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <string>SelTranslator</string>
   <key>CFBundleExecutable</key>
   <string>SelTranslator</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>com.teobale.seltranslator</string>
   <key>CFBundleInfoDictionaryVersion</key>

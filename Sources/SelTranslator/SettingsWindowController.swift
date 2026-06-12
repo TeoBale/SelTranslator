@@ -46,9 +46,10 @@ final class SettingsWindowController: NSWindowController {
 
         let hostingController = NSHostingController(rootView: contentView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "SelTranslator Settings"
+        window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.level = .normal
+        window.setContentSize(NSSize(width: 560, height: 300))
         window.center()
         window.isReleasedWhenClosed = false
         super.init(window: window)

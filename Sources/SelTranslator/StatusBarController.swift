@@ -24,15 +24,40 @@ final class StatusBarController: NSObject {
         self.onOpenTranslationSettings = onOpenTranslationSettings
         self.onOpenAccessibilitySettings = onOpenAccessibilitySettings
         self.onQuit = onQuit
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.statusItem = NSStatusBar.system.statusItem(withLength: 28)
         super.init()
     }
 
     func install() {
         if let button = statusItem.button {
-            button.title = "SelTr"
+            button.image = Self.statusBarIcon()
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
+            button.title = ""
+            button.toolTip = "SelTranslator"
         }
         rebuildMenu()
+    }
+
+    private static func statusBarIcon() -> NSImage? {
+        guard let symbol = NSImage(systemSymbolName: "translate", accessibilityDescription: "SelTranslator")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)) else {
+            let fallback = NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "SelTranslator")
+            fallback?.isTemplate = true
+            return fallback
+        }
+
+        let image = NSImage(size: NSSize(width: 22, height: 18))
+        image.lockFocus()
+        symbol.draw(
+            in: NSRect(x: 2, y: 1, width: 18, height: 16),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1
+        )
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 
     func refresh() {
