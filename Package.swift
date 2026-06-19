@@ -7,14 +7,12 @@ let package = Package(
         .macOS(.v15)
     ],
     products: [
-        .executable(
-            name: "SelTranslator",
-            targets: ["SelTranslator"]
-        )
+        .executable(name: "SelTranslator", targets: ["SelTranslator"]),
+        .library(name: "SelTranslatorCore", targets: ["SelTranslatorCore"])
     ],
     targets: [
-        .executableTarget(
-            name: "SelTranslator"
-        )
+        .target(name: "SelTranslatorCore"),
+        .executableTarget(name: "SelTranslator", dependencies: ["SelTranslatorCore"]),
+        .testTarget(name: "SelTranslatorCoreTests", dependencies: ["SelTranslatorCore"]),
     ]
 )
