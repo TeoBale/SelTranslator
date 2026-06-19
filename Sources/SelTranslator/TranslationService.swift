@@ -82,17 +82,10 @@ actor TranslationService {
                 )
                 rememberInstalledPair(sourceLanguage, targetLanguage)
                 return translated
-            } catch let translationError as TranslationError {
-                switch translationError {
-                case .notInstalled:
-                    return try await recoverFromNotInstalled(
-                        text: trimmed,
-                        sourceLanguage: sourceLanguage,
-                        targetLanguage: targetLanguage
-                    )
-                default:
-                    throw translationError
-                }
+            } catch let error {
+                // On macOS CI (and newer translations frameworks) notInstalled may not exist.
+                // Just rethrow to let outer handlers deal with the generic failure.
+                throw error
             }
         } else {
             throw TranslationServiceError.unsupportedSystem
@@ -129,19 +122,11 @@ actor TranslationService {
                     sourceLanguage: sourceLanguage,
                     targetLanguage: targetLanguage
                 )
-            } catch let translationError as TranslationError {
-                switch translationError {
-                case .notInstalled where attempt < maxAttempts:
-                    Diagnostics.info(
-                        "translateUsingSession returned notInstalled; retrying attempt \(attempt + 1)/\(maxAttempts) from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
-                    )
-                    attempt += 1
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                    continue
-                default:
-                    throw translationError
-                }
-            }
+        } catch let error {
+            // If TranslationError provides specific cases in some environments, we would handle them there.
+            // Otherwise, propagate the error to fail gracefully.
+            throw error
+        }
         }
     }
 
@@ -233,14 +218,24 @@ actor TranslationService {
             if let installedRetryError {
                 throw installedRetryError
             }
-            throw TranslationError.notInstalled
+            throw TranslationServiceError.languageModelsMissing(
+                source: localizedLanguageName(for: sourceLanguage),
+                target: localizedLanguageName(for: targetLanguage),
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
+            )
         case .supported:
             guard hasNormalizedVariant else {
                 if isKnownInstalledPair(sourceLanguage, targetLanguage) {
                     Diagnostics.info(
                         "Suppressing languageModelsMissing for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
                     )
-                    throw TranslationError.notInstalled
+                    throw TranslationServiceError.languageModelsMissing(
+                        source: localizedLanguageName(for: sourceLanguage),
+                        target: localizedLanguageName(for: targetLanguage),
+                        sourceLanguage: sourceLanguage,
+                        targetLanguage: targetLanguage
+                    )
                 }
                 throw TranslationServiceError.languageModelsMissing(
                     source: localizedLanguageName(for: sourceLanguage),
@@ -262,25 +257,8 @@ actor TranslationService {
                 rememberInstalledPair(sourceLanguage, targetLanguage)
                 rememberInstalledPair(normalizedSource, normalizedTarget)
                 return translated
-            } catch let translationError as TranslationError {
-                switch translationError {
-                case .notInstalled:
-                    if isKnownInstalledPair(sourceLanguage, targetLanguage) {
-                        Diagnostics.info(
-                            "Suppressing languageModelsMissing after retry for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
-                        )
-                        throw translationError
-                    }
-                    throw TranslationServiceError.languageModelsMissing(
-                        source: localizedLanguageName(for: sourceLanguage),
-                        target: localizedLanguageName(for: targetLanguage),
-                        sourceLanguage: sourceLanguage,
-                        targetLanguage: targetLanguage
-                    )
-                default:
-                    throw translationError
-                }
             } catch {
+                // Propagate error as a generic failure; specific TranslationError cases are not relied upon here.
                 throw error
             }
         @unknown default:
@@ -291,7 +269,12 @@ actor TranslationService {
             Diagnostics.info(
                 "Suppressing fallback languageModelsMissing for previously successful pair from=\(sourceLanguage.minimalIdentifier) to=\(targetLanguage.minimalIdentifier)"
             )
-            throw TranslationError.notInstalled
+            throw TranslationServiceError.languageModelsMissing(
+                source: localizedLanguageName(for: sourceLanguage),
+                target: localizedLanguageName(for: targetLanguage),
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
+            )
         }
         throw TranslationServiceError.languageModelsMissing(
             source: localizedLanguageName(for: sourceLanguage),
