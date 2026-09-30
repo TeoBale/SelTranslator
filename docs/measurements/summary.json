@@ -1,0 +1,56 @@
+[
+  {
+    "pair": "en-it",
+    "ownership": "fresh",
+    "workload": "short",
+    "outcome": "success",
+    "n": 30,
+    "medianMilliseconds": 38.3517495,
+    "p95Milliseconds": 98.184416
+  },
+  {
+    "pair": "en-it",
+    "ownership": "fresh",
+    "workload": "paragraph",
+    "outcome": "success",
+    "n": 30,
+    "medianMilliseconds": 124.50512499999999,
+    "p95Milliseconds": 135.027625
+  },
+  {
+    "pair": "en-it",
+    "ownership": "retained",
+    "workload": "short",
+    "outcome": "success",
+    "n": 30,
+    "medianMilliseconds": 36.136958,
+    "p95Milliseconds": 39.187042
+  },
+  {
+    "pair": "en-it",
+    "ownership": "retained",
+    "workload": "paragraph",
+    "outcome": "success",
+    "n": 30,
+    "medianMilliseconds": 124.69372899999999,
+    "p95Milliseconds": 133.909542
+  },
+  {
+    "pair": "en-fr",
+    "ownership": "availability_only",
+    "workload": "pair_switch",
+    "outcome": "missing_models",
+    "n": 30,
+    "medianMilliseconds": 2.6387295,
+    "p95Milliseconds": 2.83475
+  },
+  {
+    "pair": "en-de",
+    "ownership": "availability_only",
+    "workload": "pair_switch",
+    "outcome": "missing_models",
+    "n": 30,
+    "medianMilliseconds": 2.8622085000000004,
+    "p95Milliseconds": 3.095417
+  }
+]
